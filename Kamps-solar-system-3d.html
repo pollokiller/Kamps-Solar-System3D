@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema Solar 3D - Satélites de Comunicaciones</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    color: #fff;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+  #canvas-container {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+  }
+  canvas { display: block; }
+
+  #ui-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  #header {
+    position: absolute;
+    top: 16px; left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    pointer-events: none;
+  }
+  #header h1 {
+    font-size: 1.3rem;
+    font-weight: 300;
+    letter-spacing: 0.15em;
+    color: #a0c4ff;
+    text-shadow: 0 0 20px rgba(100,160,255,0.5);
+  }
+  #header p {
+    font-size: 0.65rem;
+    color: #556;
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+  }
+
+  #clock-panel {
+    position: absolute;
+    top: 16px; right: 16px;
+    background: rgba(0,10,30,0.85);
+    border: 1px solid rgba(100,160,255,0.25);
+    border-radius: 8px;
+    padding: 10px 14px;
+    min-width: 200px;
+    pointer-events: none;
+  }
+  #clock-panel .label { font-size: 0.6rem; color: #556; letter-spacing: 0.1em; text-transform: uppercase; }
+  #clock-panel .value { font-size: 0.9rem; color: #a0c4ff; font-weight: 300; }
+  #clock-panel .row { margin-top: 6px; }
+
+  #legend {
+    position: absolute;
+    bottom: 16px; left: 16px;
+    background: rgba(0,10,30,0.85);
+    border: 1px solid rgba(100,160,255,0.2);
+    border-radius: 8px;
+    padding: 12px 14px;
+    pointer-events: none;
+    max-width: 260px;
+  }
+  #legend h3 { font-size: 0.65rem; color: #668; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
+  .legend-item {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 5px; font-size: 0.7rem; color: #aac;
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%; flex-shrink: 0;
+  }
+  .legend-line {
+    width: 20px; height: 2px; flex-shrink: 0;
+  }
+
+  #satellite-panel {
+    position: absolute;
+    top: 16px; left: 16px;
+    background: rgba(0,10,30,0.85);
+    border: 1px solid rgba(100,160,255,0.2);
+    border-radius: 8px;
+    padding: 12px 14px;
+    pointer-events: none;
+    width: 240px;
+  }
+  #satellite-panel h3 { font-size: 0.65rem; color: #668; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
+  .sat-group { margin-bottom: 8px; }
+  .sat-group-name { font-size: 0.6rem; color: #4a9; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+  .sat-count { font-size: 0.75rem; color: #adf; font-weight: 400; }
+  .sat-status { font-size: 0.6rem; color: #556; }
+
+  #controls-hint {
+    position: absolute;
+    bottom: 16px; right: 16px;
+    background: rgba(0,10,30,0.85);
+    border: 1px solid rgba(100,160,255,0.15);
+    border-radius: 8px;
+    padding: 10px 14px;
+    pointer-events: none;
+    font-size: 0.65rem;
+    color: #556;
+    line-height: 1.6;
+  }
+  #controls-hint span { color: #778; }
+
+  #tooltip {
+    position: absolute;
+    background: rgba(0,10,30,0.95);
+    border: 1px solid rgba(100,160,255,0.4);
+    border-radius: 6px;
+    padding: 8px 12px;
+    pointer-events: none;
+    font-size: 0.72rem;
+    max-width: 200px;
+    display: none;
+    z-index: 20;
+    line-height: 1.5;
+  }
+  #tooltip .tt-name { color: #a0c4ff; font-weight: 600; margin-bottom: 3px; }
+  #tooltip .tt-info { color: #889; }
+
+  #speed-control {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,10,30,0.85);
+    border: 1px solid rgba(100,160,255,0.2);
+    border-radius: 8px;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    pointer-events: auto;
+  }
+  #speed-control label { font-size: 0.65rem; color: #668; letter-spacing: 0.08em; text-transform: uppercase; }
+  #speed-slider { accent-color: #4a8fff; width: 120px; cursor: pointer; }
+  #speed-value { font-size: 0.7rem; color: #a0c4ff; min-width: 30px; }
+
+  .pulse-ring {
+    animation: pulse 2s ease-out infinite;
+  }
+  @keyframes pulse {
+    0% { opacity: 0.8; }
+    50% { opacity: 0.3; }
+    100% { opacity: 0.8; }
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container">
+  <canvas id="main-canvas"></canvas>
+</div>
+
+<div id="ui-overlay">
+  <div id="header">
+    <h1>SISTEMA SOLAR 3D</h1>
+    <p>Satélites de Comunicaciones Activos · Tiempo Real</p>
+  </div>
+
+  <div id="clock-panel">
+    <div class="row">
+      <div class="label">Fecha / Hora UTC</div>
+      <div class="value" id="utc-time">—</div>
+    </div>
+    <div class="row">
+      <div class="label">Satélites monitoreados</div>
+      <div class="value" id="sat-total">—</div>
+    </div>
+    <div class="row">
+      <div class="label">Velocidad de simulación</div>
+      <div class="value" id="sim-speed">1x</div>
+    </div>
+  </div>
+
+  <div id="satellite-panel">
+    <h3>Constelaciones Activas</h3>
+    <div class="sat-group">
+      <div class="sat-group-name">Starlink (SpaceX)</div>
+      <div class="sat-count">6,943 satélites</div>
+      <div class="sat-status">LEO · 540–570 km</div>
+    </div>
+    <div class="sat-group">
+      <div class="sat-group-name">OneWeb</div>
+      <div class="sat-count">648 satélites</div>
+      <div class="sat-status">LEO · 1,200 km</div>
+    </div>
+    <div class="sat-group">
+      <div class="sat-group-name">Intelsat</div>
+      <div class="sat-count">58 satélites</div>
+      <div class="sat-status">GEO · 35,786 km</div>
+    </div>
+    <div class="sat-group">
+      <div class="sat-group-name">SES</div>
+      <div class="sat-count">71 satélites</div>
+      <div class="sat-status">GEO/MEO</div>
+    </div>
+    <div class="sat-group">
+      <div class="sat-group-name">GPS (USAF)</div>
+      <div class="sat-count">31 satélites</div>
+      <div class="sat-status">MEO · 20,200 km</div>
+    </div>
+    <div class="sat-group">
+      <div class="sat-group-name">Galileo (ESA)</div>
+      <div class="sat-count">28 satélites</div>
+      <div class="sat-status">MEO · 23,222 km</div>
+    </div>
+  </div>
+
+  <div id="legend">
+    <h3>Leyenda</h3>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#FFD700"></div>
+      <span>Sol</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#6CA6CD"></div>
+      <span>Planetas rocosos</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#DEB887"></div>
+      <span>Gigantes gaseosos</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-line" style="background: rgba(100,180,255,0.4)"></div>
+      <span>Órbita planetaria</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#00FF88; width:6px; height:6px"></div>
+      <span>Satélites LEO (Starlink/OneWeb)</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#FF8800; width:6px; height:6px"></div>
+      <span>Satélites GEO (comms)</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#FF4488; width:6px; height:6px"></div>
+      <span>Satélites MEO (nav)</span>
+    </div>
+  </div>
+
+  <div id="speed-control">
+    <label>Velocidad</label>
+    <input type="range" id="speed-slider" min="-2" max="4" step="0.1" value="1">
+    <span id="speed-value">1x</span>
+  </div>
+
+  <div id="controls-hint">
+    <span>🖱 Arrastrar</span> — rotar vista<br>
+    <span>🖱 Scroll</span> — acercar/alejar<br>
+    <span>Click</span> — info del objeto<br>
+    <span>Slider</span> — velocidad simulación
+  </div>
+
+  <div id="tooltip"></div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  const canvas = document.getElementById('main-canvas');
+  const ctx = canvas.getContext('2d');
+  const tooltip = document.getElementById('tooltip');
+
+  let W, H, CX, CY;
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    CX = W / 2; CY = H / 2;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Camera state
+  let camRotX = 0.4;
+  let camRotY = 0.0;
+  let camZoom = 1.0;
+  let isDragging = false;
+  let lastMX = 0, lastMY = 0;
+
+  // Time / speed
+  let simTime = Date.now();
+  let speedMult = 1.0;
+
+  // Star field
+  const stars = [];
+  for (let i = 0; i < 1800; i++) {
+    stars.push({
+      x: (Math.random() - 0.5) * 8000,
+      y: (Math.random() - 0.5) * 8000,
+      z: (Math.random() - 0.5) * 8000,
+      r: Math.random() * 1.4 + 0.3,
+      brightness: Math.random() * 0.7 + 0.3
+    });
+  }
+
+  // Planet data (scaled for visualization, not real scale)
+  const AU = 120; // pixels per AU at zoom=1
+  const planets = [
+    {
+      name: 'Mercurio',
+      radius: 4,
+      orbitRadius: 0.387 * AU,
+      period: 0.241,
+      color: '#A0A0A0',
+      emissive: '#888',
+      angle: Math.random() * Math.PI * 2,
+      info: 'Planeta más cercano al Sol\nTemp: -180°C a 430°C\nSin atmósfera significativa',
+      moons: []
+    },
+    {
+      name: 'Venus',
+      radius: 7,
+      orbitRadius: 0.723 * AU,
+      period: 0.615,
+      color: '#E8C870',
+      emissive: '#C9A04A',
+      angle: Math.random() * Math.PI * 2,
+      info: 'El planeta más caliente\nTemp media: 465°C\nAtmósfera de CO₂',
+      moons: []
+    },
+    {
+      name: 'Tierra',
+      radius: 7.5,
+      orbitRadius: 1.0 * AU,
+      period: 1.0,
+      color: '#4A90D9',
+      emissive: '#2266AA',
+      angle: Math.random() * Math.PI * 2,
+      info: 'Nuestro hogar\nTemp media: 15°C\n8.0 mil millones de habitantes',
+      moons: [
+        { name: 'Luna', radius: 2.5, orbitRadius: 18, period: 27.3 / 365, color: '#CCC', angle: Math.random() * Math.PI * 2 }
+      ],
+      hasSatellites: true,
+      satellites: generateEarthSatellites()
+    },
+    {
+      name: 'Marte',
+      radius: 5.5,
+      orbitRadius: 1.524 * AU,
+      period: 1.881,
+      color: '#C1440E',
+      emissive: '#8B2500',
+      angle: Math.random() * Math.PI * 2,
+      info: 'El Planeta Rojo\nTemp media: -63°C\nHasado de exploración robótica',
+      moons: [
+        { name: 'Fobos', radius: 1.5, orbitRadius: 10, period: 0.319 / 365, color: '#888', angle: Math.random() * Math.PI * 2 },
+        { name: 'Deimos', radius: 1.2, orbitRadius: 14, period: 1.263 / 365, color: '#999', angle: Math.random() * Math.PI * 2 }
+      ]
+    },
+    {
+      name: 'Júpiter',
+      radius: 22,
+      orbitRadius: 5.203 * AU,
+      period: 11.86,
+      color: '#C88B3A',
+      emissive: '#8B5E2A',
+      angle: Math.random() * Math.PI * 2,
+      info: 'El planeta más grande\nDiámetro: 139,820 km\n95 lunas conocidas',
+      moons: [
+        { name: 'Ío', radius: 2.5, orbitRadius: 30, period: 1.769 / 365, color: '#FFCC44', angle: Math.random() * Math.PI * 2 },
+        { name: 'Europa', radius: 2.2, orbitRadius: 38, period: 3.551 / 365, color: '#DDD', angle: Math.random() * Math.PI * 2 },
+        { name: 'Ganímedes', radius: 3, orbitRadius: 48, period: 7.155 / 365, color: '#AAA', angle: Math.random() * Math.PI * 2 },
+        { name: 'Calisto', radius: 2.8, orbitRadius: 58, period: 16.69 / 365, color: '#888', angle: Math.random() * Math.PI * 2 }
+      ]
+    },
+    {
+      name: 'Saturno',
+      radius: 18,
+      orbitRadius: 9.537 * AU,
+      period: 29.46,
+      color: '#E4D191',
+      emissive: '#C0AA60',
+      angle: Math.random() * Math.PI * 2,
+      info: 'El planeta de los anillos\n146 lunas conocidas\nDensidad menor que el agua',
+      hasRings: true,
+      moons: [
+        { name: 'Titán', radius: 3, orbitRadius: 45, period: 15.945 / 365, color: '#DDAA44', angle: Math.random() * Math.PI * 2 },
+        { name: 'Encélado', radius: 1.5, orbitRadius: 32, period: 1.370 / 365, color: '#EEE', angle: Math.random() * Math.PI * 2 }
+      ]
+    },
+    {
+      name: 'Urano',
+      radius: 13,
+      orbitRadius: 19.19 * AU,
+      period: 84.01,
+      color: '#A4E4F0',
+      emissive: '#60B4C0',
+      angle: Math.random() * Math.PI * 2,
+      info: 'Gigante de hielo azul\nGira sobre su lado\n28 lunas conocidas',
+      moons: [
+        { name: 'Titania', radius: 2, orbitRadius: 28, period: 8.706 / 365, color: '#CCC', angle: Math.random() * Math.PI * 2 },
+        { name: 'Oberón', radius: 1.8, orbitRadius: 34, period: 13.463 / 365, color: '#BBB', angle: Math.random() * Math.PI * 2 }
+      ]
+    },
+    {
+      name: 'Neptuno',
+      radius: 12,
+      orbitRadius: 30.07 * AU,
+      period: 164.8,
+      color: '#3F54BA',
+      emissive: '#2233AA',
+      angle: Math.random() * Math.PI * 2,
+      info: 'El planeta más lejano\nVientos: 2,100 km/h\n16 lunas conocidas',
+      moons: [
+        { name: 'Tritón', radius: 2.5, orbitRadius: 30, period: 5.877 / 365, color: '#C8E0FF', angle: Math.random() * Math.PI * 2 }
+      ]
+    }
+  ];
+
+  function generateEarthSatellites() {
+    const sats = [];
+    // LEO Starlink belt (~540 km)
+    const leoRadius = 14;
+    for (let i = 0; i < 80; i++) {
+      const angle = (i / 80) * Math.PI * 2 + Math.random() * 0.3;
+      const incl = (Math.random() - 0.5) * 0.9;
+      sats.push({
+        type: 'LEO',
+        color: '#00FF88',
+        angle: angle,
+        incl: incl,
+        orbitR: leoRadius + Math.random() * 3,
+        speed: 360 / (90 / 365) * (1 + Math.random() * 0.1),
+        size: 1.5
+      });
+    }
+    // LEO OneWeb (~1200 km)
+    for (let i = 0; i < 30; i++) {
+      const angle = (i / 30) * Math.PI * 2 + Math.random() * 0.4;
+      const incl = (Math.random() - 0.5) * 1.5;
+      sats.push({
+        type: 'LEO2',
+        color: '#00FFCC',
+        angle: angle,
+        incl: incl,
+        orbitR: 18 + Math.random() * 2,
+        speed: 360 / (109 / 365) * (1 + Math.random() * 0.1),
+        size: 1.4
+      });
+    }
+    // GEO belt (~35,786 km)
+    for (let i = 0; i < 20; i++) {
+      const angle = (i / 20) * Math.PI * 2;
+      sats.push({
+        type: 'GEO',
+        color: '#FF8800',
+        angle: angle,
+        incl: (Math.random() - 0.5) * 0.05,
+        orbitR: 42 + Math.random() * 1,
+        speed: 360 / (1.0),
+        size: 2.0
+      });
+    }
+    // MEO GPS (~20,200 km)
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
+      sats.push({
+        type: 'MEO',
+        color: '#FF4488',
+        angle: angle,
+        incl: (Math.random() - 0.5) * 1.0,
+        orbitR: 30 + Math.random() * 2,
+        speed: 360 / (0.5),
+        size: 1.8
+      });
+    }
+    return sats;
+  }
+
+  // 3D projection helpers
+  function project3D(x, y, z) {
+    // Rotate around Y axis (camRotY)
+    const cosY = Math.cos(camRotY), sinY = Math.sin(camRotY);
+    let rx = x * cosY - z * sinY;
+    let rz = x * sinY + z * cosY;
+    // Rotate around X axis (camRotX)
+    const cosX = Math.cos(camRotX), sinX = Math.sin(camRotX);
+    let ry2 = y * cosX - rz * sinX;
+    let rz2 = y * sinX + rz * cosX;
+
+    const perspective = 1400 * camZoom;
+    const d = perspective + rz2;
+    if (d <= 0) return null;
+    const scale = perspective / d;
+    return {
+      sx: CX + rx * scale * camZoom,
+      sy: CY + ry2 * scale * camZoom,
+      scale: scale * camZoom,
+      depth: rz2
+    };
+  }
+
+  function drawStar(star) {
+    const p = project3D(star.x, star.y, star.z);
+    if (!p || p.sx < 0 || p.sx > W || p.sy < 0 || p.sy > H) return;
+    const r = star.r * p.scale * 0.8;
+    if (r < 0.2) return;
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, Math.max(0.3, r), 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${star.brightness * Math.min(1, p.scale * 2)})`;
+    ctx.fill();
+  }
+
+  function drawOrbitEllipse(orbitRadius, tiltX = 0, tiltZ = 0, segments = 100, color = 'rgba(100,160,255,0.2)') {
+    const points = [];
+    for (let i = 0; i <= segments; i++) {
+      const a = (i / segments) * Math.PI * 2;
+      const x = orbitRadius * Math.cos(a);
+      const z = orbitRadius * Math.sin(a);
+      const y = tiltX * z + tiltZ * x;
+      const p = project3D(x, y, z);
+      if (p) points.push(p);
+    }
+    if (points.length < 2) return;
+    ctx.beginPath();
+    ctx.moveTo(points[0].sx, points[0].sy);
+    for (let i = 1; i < points.length; i++) {
+      ctx.lineTo(points[i].sx, points[i].sy);
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+  }
+
+  function drawSun() {
+    const p = project3D(0, 0, 0);
+    if (!p) return;
+    const r = 30 * p.scale;
+    // Outer glow layers
+    const glows = [
+      { r: r * 4, alpha: 0.03 },
+      { r: r * 2.5, alpha: 0.08 },
+      { r: r * 1.6, alpha: 0.18 },
+      { r: r * 1.2, alpha: 0.35 },
+    ];
+    for (const g of glows) {
+      const grd = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, g.r);
+      grd.addColorStop(0, `rgba(255,220,50,${g.alpha})`);
+      grd.addColorStop(1, 'rgba(255,100,0,0)');
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, g.r, 0, Math.PI * 2);
+      ctx.fillStyle = grd;
+      ctx.fill();
+    }
+    // Sun body
+    const sunGrd = ctx.createRadialGradient(p.sx - r*0.3, p.sy - r*0.3, 0, p.sx, p.sy, r);
+    sunGrd.addColorStop(0, '#FFFDE0');
+    sunGrd.addColorStop(0.4, '#FFE040');
+    sunGrd.addColorStop(0.8, '#FF8C00');
+    sunGrd.addColorStop(1, '#CC4400');
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, Math.max(2, r), 0, Math.PI * 2);
+    ctx.fillStyle = sunGrd;
+    ctx.fill();
+  }
+
+  function drawPlanet(planet, t) {
+    // Orbital motion
+    const yearSec = 10; // 1 Earth year = 10 seconds at 1x speed
+    const angSpeed = (Math.PI * 2) / (planet.period * yearSec);
+    planet.angle += angSpeed * t * speedMult;
+
+    const px = planet.orbitRadius * Math.cos(planet.angle);
+    const pz = planet.orbitRadius * Math.sin(planet.angle);
+    const py = 0;
+
+    // Draw orbit
+    drawOrbitEllipse(planet.orbitRadius);
+
+    const p = project3D(px, py, pz);
+    if (!p) return;
+
+    const r = planet.radius * p.scale;
+    if (r < 0.5) return;
+
+    // Rings (Saturn)
+    if (planet.hasRings) {
+      drawRings(px, py, pz, planet.radius, p);
+    }
+
+    // Planet glow
+    if (r > 3) {
+      const grd = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 2);
+      grd.addColorStop(0, planet.color + '40');
+      grd.addColorStop(1, 'transparent');
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, r * 2, 0, Math.PI * 2);
+      ctx.fillStyle = grd;
+      ctx.fill();
+    }
+
+    // Planet body
+    const bodyGrd = ctx.createRadialGradient(
+      p.sx - r * 0.3, p.sy - r * 0.3, 0,
+      p.sx, p.sy, r
+    );
+    bodyGrd.addColorStop(0, planet.color);
+    bodyGrd.addColorStop(0.7, planet.color);
+    bodyGrd.addColorStop(1, planet.emissive);
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, Math.max(1.5, r), 0, Math.PI * 2);
+    ctx.fillStyle = bodyGrd;
+    ctx.fill();
+
+    // Earth's atmosphere
+    if (planet.name === 'Tierra') {
+      const atmGrd = ctx.createRadialGradient(p.sx, p.sy, r * 0.9, p.sx, p.sy, r * 1.25);
+      atmGrd.addColorStop(0, 'rgba(80,140,255,0.15)');
+      atmGrd.addColorStop(1, 'rgba(80,140,255,0)');
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, r * 1.25, 0, Math.PI * 2);
+      ctx.fillStyle = atmGrd;
+      ctx.fill();
+    }
+
+    // Label
+    if (r > 4) {
+      ctx.fillStyle = 'rgba(180,200,255,0.85)';
+      ctx.font = `${Math.max(9, 10 * p.scale * camZoom)}px 'Segoe UI', system-ui`;
+      ctx.textAlign = 'center';
+      ctx.fillText(planet.name, p.sx, p.sy + Math.max(8, r + 10));
+    }
+
+    // Moons
+    if (planet.moons && r > 3) {
+      for (const moon of planet.moons) {
+        drawMoon(moon, px, py, pz, p.scale, t);
+      }
+    }
+
+    // Earth satellites
+    if (planet.hasSatellites && planet.satellites && r > 4) {
+      drawSatellites(planet.satellites, px, py, pz, t);
+    }
+
+    planet._screenPos = p;
+    planet._worldPos = { x: px, y: py, z: pz };
+  }
+
+  function drawRings(px, py, pz, planetR, p) {
+    const innerR = planetR * 1.5;
+    const outerR = planetR * 2.6;
+    const steps = 60;
+    for (let i = 0; i < steps; i++) {
+      const a = (i / steps) * Math.PI * 2;
+      const a2 = ((i + 1) / steps) * Math.PI * 2;
+      const ri = innerR + (outerR - innerR) * (i % 3) / steps;
+      const ro = ri + (outerR - innerR) / steps * 3;
+      const x1i = px + ri * Math.cos(a), z1i = pz + ri * Math.sin(a) * 0.25;
+      const x2i = px + ri * Math.cos(a2), z2i = pz + ri * Math.sin(a2) * 0.25;
+      const x1o = px + ro * Math.cos(a), z1o = pz + ro * Math.sin(a) * 0.25;
+      const x2o = px + ro * Math.cos(a2), z2o = pz + ro * Math.sin(a2) * 0.25;
+      const p1 = project3D(x1i, py, z1i);
+      const p2 = project3D(x2i, py, z2i);
+      const p3 = project3D(x2o, py, z2o);
+      const p4 = project3D(x1o, py, z1o);
+      if (!p1 || !p2 || !p3 || !p4) continue;
+      const alpha = 0.3 + Math.random() * 0.1;
+      ctx.beginPath();
+      ctx.moveTo(p1.sx, p1.sy);
+      ctx.lineTo(p2.sx, p2.sy);
+      ctx.lineTo(p3.sx, p3.sy);
+      ctx.lineTo(p4.sx, p4.sy);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(220,200,140,${alpha * 0.5})`;
+      ctx.fill();
+    }
+  }
+
+  function drawMoon(moon, px, py, pz, planetScale, t) {
+    const yearSec = 10;
+    const angSpeed = (Math.PI * 2) / (moon.period * yearSec);
+    moon.angle += angSpeed * t * speedMult;
+
+    const mx = px + moon.orbitRadius * Math.cos(moon.angle);
+    const mz = pz + moon.orbitRadius * Math.sin(moon.angle);
+    const my = py;
+
+    const p = project3D(mx, my, mz);
+    if (!p) return;
+    const r = moon.radius * p.scale;
+    if (r < 0.5) return;
+
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, Math.max(0.8, r), 0, Math.PI * 2);
+    ctx.fillStyle = moon.color;
+    ctx.fill();
+  }
+
+  function drawSatellites(sats, px, py, pz, t) {
+    for (const sat of sats) {
+      const yearSec = 10;
+      const dayFraction = sat.speed / 360;
+      const angSpeed = (Math.PI * 2) * dayFraction / yearSec;
+      sat.angle += angSpeed * t * speedMult;
+
+      const sx = px + sat.orbitR * Math.cos(sat.angle);
+      const sz = pz + sat.orbitR * Math.sin(sat.angle) * Math.cos(sat.incl);
+      const sy = sat.orbitR * Math.sin(sat.angle) * Math.sin(sat.incl);
+
+      const p = project3D(sx, sy + py, sz);
+      if (!p) continue;
+      const r = sat.size * p.scale;
+      if (r < 0.3) continue;
+
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, Math.max(0.5, r), 0, Math.PI * 2);
+      ctx.fillStyle = sat.color;
+      ctx.globalAlpha = 0.8;
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+    }
+  }
+
+  // Asteroid belt (decorative)
+  const asteroids = [];
+  for (let i = 0; i < 300; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = (2.2 + Math.random() * 1.2) * AU;
+    asteroids.push({
+      angle: a,
+      radius: r,
+      speed: 0.08 + Math.random() * 0.04,
+      y: (Math.random() - 0.5) * 5,
+      size: Math.random() * 1.2 + 0.3
+    });
+  }
+
+  function drawAsteroidBelt(t) {
+    for (const ast of asteroids) {
+      const yearSec = 10;
+      const period = Math.pow(ast.radius / AU, 1.5) * yearSec;
+      ast.angle += (Math.PI * 2 / period) * t * speedMult;
+      const ax = ast.radius * Math.cos(ast.angle);
+      const az = ast.radius * Math.sin(ast.angle);
+      const p = project3D(ax, ast.y, az);
+      if (!p) continue;
+      const r = ast.size * p.scale;
+      if (r < 0.2) continue;
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, Math.max(0.3, r), 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(180,160,120,0.4)`;
+      ctx.fill();
+    }
+  }
+
+  // Hit testing
+  let hoveredObject = null;
+
+  function hitTest(mx, my) {
+    let best = null, bestDist = 20;
+    for (const planet of planets) {
+      if (!planet._screenPos) continue;
+      const dx = mx - planet._screenPos.sx;
+      const dy = my - planet._screenPos.sy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const r = planet.radius * planet._screenPos.scale;
+      if (dist < Math.max(r + 5, 12) && dist < bestDist) {
+        bestDist = dist;
+        best = planet;
+      }
+    }
+    return best;
+  }
+
+  // Mouse events
+  canvas.addEventListener('mousedown', e => {
+    isDragging = true;
+    lastMX = e.clientX;
+    lastMY = e.clientY;
+  });
+  window.addEventListener('mouseup', () => { isDragging = false; });
+  window.addEventListener('mousemove', e => {
+    if (isDragging) {
+      const dx = e.clientX - lastMX;
+      const dy = e.clientY - lastMY;
+      camRotY += dx * 0.007;
+      camRotX += dy * 0.007;
+      camRotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camRotX));
+      lastMX = e.clientX;
+      lastMY = e.clientY;
+    } else {
+      const hit = hitTest(e.clientX, e.clientY);
+      if (hit) {
+        tooltip.style.display = 'block';
+        tooltip.style.left = (e.clientX + 15) + 'px';
+        tooltip.style.top = (e.clientY - 10) + 'px';
+        tooltip.innerHTML = `<div class="tt-name">${hit.name}</div><div class="tt-info">${hit.info.replace(/\n/g, '<br>')}</div>`;
+        canvas.style.cursor = 'pointer';
+      } else {
+        tooltip.style.display = 'none';
+        canvas.style.cursor = 'grab';
+      }
+    }
+  });
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 0.92 : 1.09;
+    camZoom = Math.max(0.08, Math.min(8, camZoom * factor));
+  }, { passive: false });
+
+  // Speed control
+  const speedSlider = document.getElementById('speed-slider');
+  const speedValueEl = document.getElementById('speed-value');
+  speedSlider.addEventListener('input', () => {
+    const v = parseFloat(speedSlider.value);
+    speedMult = Math.pow(10, v * 0.7);
+    const disp = speedMult >= 1000 ? (speedMult / 1000).toFixed(0) + 'k' : speedMult.toFixed(speedMult < 10 ? 1 : 0);
+    speedValueEl.textContent = disp + 'x';
+    document.getElementById('sim-speed').textContent = disp + 'x';
+  });
+
+  // UI clock
+  function updateClock() {
+    const now = new Date();
+    const utcStr = now.toUTCString().replace(' GMT', ' UTC');
+    document.getElementById('utc-time').textContent = utcStr;
+    document.getElementById('sat-total').textContent = '7,779 satélites activos';
+  }
+
+  // Main render loop
+  let lastFrame = performance.now();
+
+  function render(timestamp) {
+    const dt = Math.min((timestamp - lastFrame) / 1000, 0.1);
+    lastFrame = timestamp;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Background gradient
+    const bg = ctx.createRadialGradient(CX, CY, 0, CX, CY, Math.max(W, H));
+    bg.addColorStop(0, '#020814');
+    bg.addColorStop(1, '#000005');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Stars (drawn at very back)
+    for (const star of stars) drawStar(star);
+
+    // Asteroid belt
+    drawAsteroidBelt(dt);
+
+    // Sun
+    drawSun();
+
+    // Sort planets by depth for correct occlusion
+    const sortedPlanets = [...planets].sort((a, b) => {
+      const pa = project3D(
+        a.orbitRadius * Math.cos(a.angle), 0, a.orbitRadius * Math.sin(a.angle)
+      );
+      const pb = project3D(
+        b.orbitRadius * Math.cos(b.angle), 0, b.orbitRadius * Math.sin(b.angle)
+      );
+      return (pa ? pa.depth : 0) - (pb ? pb.depth : 0);
+    });
+
+    for (const planet of sortedPlanets) {
+      drawPlanet(planet, dt);
+    }
+
+    requestAnimationFrame(render);
+  }
+
+  // Clock update every second
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // Boot
+  canvas.style.cursor = 'grab';
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>
